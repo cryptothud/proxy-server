@@ -1,0 +1,10 @@
+{
+    "version": 1,
+    "name": "proxy-server",
+    "environments": {
+      "production": {
+        "buildCommand": "",
+        "startCommand": "php -S 0.0.0.0:$PORT"
+      }
+    }
+  }
