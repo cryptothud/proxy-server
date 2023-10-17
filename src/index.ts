@@ -16,7 +16,7 @@ const getIP = request =>
   request.connection.remoteAddress
 
 const getRateLimitMiddlewares = ({
-  limit = 500,
+  limit = 5000,
   windowMs = 60 * 1000,
   delayAfter = Math.round(10 / 2),
   delayMs = 500,
@@ -36,20 +36,20 @@ const applyMiddleware = middleware => (request, response) =>
 
 export const middlewares = getRateLimitMiddlewares().map(applyMiddleware)
 
-app.get('/', (req: Request, res: Response) => {
+app.get('/', async (req: Request, res: Response) => {
   const { url } = req.query;
 
   if (!url) {
     return res.status(400).send('Missing URL parameter');
   }
 
-  axios.get(url.toString())
-    .then(response => {
-      res.json(response.data);
-    })
-    .catch(error => {
-      res.status(500).send(`Error fetching data from ${url}: ${error}`);
-    });
+  try {
+    const fetchedData = await axios.get(url.toString())
+    return res.status(200).json(fetchedData?.data)
+  } catch (e) {
+    return res.status(500).json(`Error fetching data from ${url}: ${e.toString()}`);
+  }
+
 });
 
 app.listen(port, () => {
