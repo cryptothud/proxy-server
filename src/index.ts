@@ -47,7 +47,13 @@ app.get('/', async (req: Request, res: Response) => {
     const fetchedData = await axios.get(url.toString())
     return res.status(200).json(fetchedData?.data)
   } catch (e) {
-    return res.status(500).json(`Error fetching data from ${url}: ${e.toString()}`);
+    await wait(5000)
+    try {
+      const fetchedData = await axios.get(url.toString())
+      return res.status(200).json(fetchedData?.data)
+    } catch (e) {
+      return res.status(500).json(`Error fetching data from ${url}: ${e.toString()}`);
+    }
   }
 
 });
@@ -55,3 +61,7 @@ app.get('/', async (req: Request, res: Response) => {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
+const wait = (ms: any) => {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
