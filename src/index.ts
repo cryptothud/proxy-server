@@ -47,7 +47,7 @@ app.get('/', async (req: Request, res: Response) => {
     const fetchedData = await axios.get(url.toString())
     return res.status(200).json(fetchedData?.data)
   } catch (e) {
-    await wait(5000)
+    await wait(2000)
     try {
       const fetchedData = await axios.get(url.toString())
       return res.status(200).json(fetchedData?.data)
