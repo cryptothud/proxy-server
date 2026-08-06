@@ -1,67 +1,112 @@
-import express, { Express, Request, Response } from 'express';
-import cors from 'cors'
-import axios from "axios";
-import rateLimit from "express-rate-limit"
-import slowDown from "express-slow-down"
+import express, { type NextFunction, type Request, type Response } from "express";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import slowDown from "express-slow-down";
+import { config, assertConfigured } from "./config";
+import { guardUrl, type GuardFailure } from "./url-guard";
+
+assertConfigured();
 
 const app = express();
-const port = process.env.PORT || 3006;
 
-app.use(cors());
+// Required for express-rate-limit to read the real client IP behind a platform proxy
+// (Railway, Vercel, Fly). Without it every request is attributed to the load balancer.
+app.set("trust proxy", 1);
 
-const getIP = request =>
-  request.ip ||
-  request.headers['x-forwarded-for'] ||
-  request.headers['x-real-ip'] ||
-  request.connection.remoteAddress
+app.use(
+  cors({
+    origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,
+  }),
+);
 
-const getRateLimitMiddlewares = ({
-  limit = 5000,
-  windowMs = 60 * 1000,
-  delayAfter = Math.round(10 / 2),
-  delayMs = 500,
-} = {}) => [
-    slowDown({ keyGenerator: getIP, windowMs, delayAfter, delayMs }),
-    rateLimit({ keyGenerator: getIP, windowMs, max: limit }),
-  ]
+app.use(
+  slowDown({
+    windowMs: config.rateLimit.windowMs,
+    delayAfter: config.rateLimit.delayAfter,
+    delayMs: () => config.rateLimit.delayMs,
+  }),
+);
 
+app.use(
+  rateLimit({
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.maxRequests,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
 
-const applyMiddleware = middleware => (request, response) =>
-  new Promise((resolve, reject) => {
-    middleware(request, response, result =>
-      result instanceof Error ? reject(result) : resolve(result)
-    )
-  })
+const GUARD_MESSAGES: Record<GuardFailure, string> = {
+  "invalid-url": "The url parameter is not a valid URL.",
+  "unsupported-protocol": "Only http and https URLs are supported.",
+  "host-not-allowed": "That host is not on this proxy's allowlist.",
+  "private-address": "That host resolves to a private address.",
+};
 
+app.get("/health", (_req: Request, res: Response) => {
+  res.status(200).json({ status: "ok" });
+});
 
-export const middlewares = getRateLimitMiddlewares().map(applyMiddleware)
-
-app.get('/', async (req: Request, res: Response) => {
+app.get("/", async (req: Request, res: Response) => {
   const { url } = req.query;
 
-  if (!url) {
-    return res.status(400).send('Missing URL parameter');
+  if (typeof url !== "string" || url.length === 0) {
+    res.status(400).json({ error: "Missing url parameter." });
+    return;
   }
+
+  const guard = await guardUrl(url);
+  if (!guard.ok) {
+    res.status(400).json({ error: GUARD_MESSAGES[guard.reason] });
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);
 
   try {
-    const fetchedData = await axios.get(url.toString())
-    return res.status(200).json(fetchedData?.data)
-  } catch (e) {
-    await wait(2000)
-    try {
-      const fetchedData = await axios.get(url.toString())
-      return res.status(200).json(fetchedData?.data)
-    } catch (e) {
-      return res.status(500).json(`Error fetching data from ${url}: ${e.toString()}`);
+    const upstream = await fetch(guard.url, {
+      signal: controller.signal,
+      // Following redirects would let an allowed host bounce the request to a blocked one.
+      redirect: "manual",
+      headers: { accept: req.headers.accept ?? "*/*" },
+    });
+
+    const declaredLength = Number(upstream.headers.get("content-length") ?? 0);
+    if (declaredLength > config.maxResponseBytes) {
+      res.status(502).json({ error: "Upstream response too large." });
+      return;
     }
+
+    const body = await upstream.arrayBuffer();
+    if (body.byteLength > config.maxResponseBytes) {
+      res.status(502).json({ error: "Upstream response too large." });
+      return;
+    }
+
+    const contentType = upstream.headers.get("content-type");
+    if (contentType) res.set("content-type", contentType);
+
+    res.status(upstream.status).send(Buffer.from(body));
+  } catch (error) {
+    const aborted = error instanceof Error && error.name === "AbortError";
+    // Deliberately generic: upstream error text can disclose internal hostnames and paths.
+    console.error(`Proxy request failed for ${guard.url.host}:`, error);
+    res.status(aborted ? 504 : 502).json({
+      error: aborted ? "Upstream request timed out." : "Failed to fetch from upstream.",
+    });
+  } finally {
+    clearTimeout(timeout);
   }
-
 });
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+// Express needs all four parameters to recognise this as an error handler.
+app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Unhandled error:", error);
+  res.status(500).json({ error: "Internal server error." });
 });
 
-const wait = (ms: any) => {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+app.listen(config.port, () => {
+  console.log(`Proxy listening on port ${config.port}`);
+  console.log(`Allowed hosts: ${config.allowedHosts.join(", ")}`);
+});
