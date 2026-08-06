@@ -4,17 +4,27 @@ const list = (value: string | undefined): string[] =>
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
 
+const withDefault = (values: string[], fallback: string[]): string[] =>
+  values.length > 0 ? values : fallback;
+
+/** True when ALLOWED_HOSTS was never set, so the permissive default is in play. */
+export const usingDefaultHostPolicy = list(process.env.ALLOWED_HOSTS).length === 0;
+
 export const config = {
   port: Number(process.env.PORT ?? 3006),
 
   /**
    * Hostnames this proxy may fetch from.
    *
-   * Set to `*` to allow any public host — useful when the proxy exists to solve CORS for
-   * arbitrary URLs rather than to front a known set of upstreams. Private and internal
-   * addresses stay blocked either way; that check is independent of this list.
+   * Defaults to `*` — any public host — so the service runs as a general-purpose CORS proxy
+   * with no configuration. Narrow it by listing hostnames when the proxy fronts a known set
+   * of upstreams.
+   *
+   * This list never governs internal reachability. Private, loopback, link-local and
+   * cloud-metadata addresses are rejected by `url-guard` regardless of what is set here, so
+   * the permissive default cannot expose a private network.
    */
-  allowedHosts: list(process.env.ALLOWED_HOSTS),
+  allowedHosts: withDefault(list(process.env.ALLOWED_HOSTS), ["*"]),
 
   /** Browser origins allowed to call the proxy. Empty means same-origin/non-browser only. */
   allowedOrigins: list(process.env.ALLOWED_ORIGINS),
@@ -37,17 +47,14 @@ export const config = {
 export const allowsAnyHost = config.allowedHosts.includes("*");
 
 /**
- * Fail fast rather than booting with no host policy at all.
+ * Reports the active host policy at startup.
  *
- * `*` is a valid answer, but it has to be stated. An empty variable is far more likely to
- * be an unset environment than a deliberate choice, and the two should not look the same.
+ * The permissive default is deliberate, so it is stated in the log rather than enforced by
+ * refusing to boot — an operator reading the logs should be able to tell which mode is live
+ * without inspecting the environment.
  */
-export const assertConfigured = (): void => {
-  if (config.allowedHosts.length === 0) {
-    throw new Error(
-      "ALLOWED_HOSTS is not set. Either list the hostnames this proxy may fetch " +
-        "(ALLOWED_HOSTS=arweave.net,api.example.com) or set ALLOWED_HOSTS=* to allow any " +
-        "public host. Private and internal addresses are blocked in both cases.",
-    );
-  }
-};
+export const describeHostPolicy = (): string =>
+  allowsAnyHost
+    ? `any public host${usingDefaultHostPolicy ? " (ALLOWED_HOSTS unset, using default)" : ""}` +
+      " — private and internal addresses blocked"
+    : `allowlist: ${config.allowedHosts.join(", ")}`;

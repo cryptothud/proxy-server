@@ -2,10 +2,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import slowDown from "express-slow-down";
-import { config, assertConfigured } from "./config";
+import { config, describeHostPolicy } from "./config";
 import { guardUrl, type GuardFailure } from "./url-guard";
-
-assertConfigured();
 
 const app = express();
 
@@ -108,5 +106,5 @@ app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(config.port, () => {
   console.log(`Proxy listening on port ${config.port}`);
-  console.log(`Allowed hosts: ${config.allowedHosts.join(", ")}`);
+  console.log(`Host policy: ${describeHostPolicy()}`);
 });

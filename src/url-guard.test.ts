@@ -5,8 +5,12 @@ import { describe, it } from "node:test";
  * `config` reads the environment once at import time, so ALLOWED_HOSTS must be set before
  * `url-guard` is required. Each block therefore loads the module through a fresh cache.
  */
-const loadGuard = async (allowedHosts: string) => {
-  process.env.ALLOWED_HOSTS = allowedHosts;
+const loadGuard = async (allowedHosts: string | undefined) => {
+  if (allowedHosts === undefined) {
+    delete process.env.ALLOWED_HOSTS;
+  } else {
+    process.env.ALLOWED_HOSTS = allowedHosts;
+  }
   delete require.cache[require.resolve("./config")];
   delete require.cache[require.resolve("./url-guard")];
   return (await import("./url-guard")) as typeof import("./url-guard");
@@ -121,5 +125,41 @@ describe("guardUrl — wildcard host mode", () => {
     const { guardUrl } = await loadGuard("*");
     const result = await guardUrl("file:///etc/passwd");
     assert.deepEqual(result, { ok: false, reason: "unsupported-protocol" });
+  });
+});
+
+/**
+ * With ALLOWED_HOSTS unset the proxy runs permissively by default, so an existing
+ * deployment keeps working without new environment variables. The address guard is what
+ * makes that default safe, so it is asserted here rather than assumed.
+ */
+describe("guardUrl — ALLOWED_HOSTS unset (default policy)", () => {
+  it("allows arbitrary public hosts", async () => {
+    const { guardUrl } = await loadGuard(undefined);
+    for (const url of ["https://example.com/", "https://arweave.net/x"]) {
+      assert.equal((await guardUrl(url)).ok, true, url);
+    }
+  });
+
+  it("blocks private and internal addresses", async () => {
+    const { guardUrl } = await loadGuard(undefined);
+    for (const url of [
+      "http://127.0.0.1/",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://10.0.0.5/",
+      "http://192.168.1.1/",
+      "http://localhost/",
+    ]) {
+      assert.deepEqual(await guardUrl(url), { ok: false, reason: "private-address" }, url);
+    }
+  });
+
+  it("reports the default policy in the startup description", async () => {
+    delete process.env.ALLOWED_HOSTS;
+    delete require.cache[require.resolve("./config")];
+    const { describeHostPolicy } = await import("./config");
+    const description = describeHostPolicy();
+    assert.match(description, /any public host/);
+    assert.match(description, /ALLOWED_HOSTS unset/);
   });
 });
