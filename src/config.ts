@@ -8,10 +8,11 @@ export const config = {
   port: Number(process.env.PORT ?? 3006),
 
   /**
-   * Hostnames this proxy is allowed to fetch from.
+   * Hostnames this proxy may fetch from.
    *
-   * An allowlist is the whole point of the service. Without one, any caller can aim the
-   * server at internal addresses or use it to launder arbitrary outbound traffic.
+   * Set to `*` to allow any public host — useful when the proxy exists to solve CORS for
+   * arbitrary URLs rather than to front a known set of upstreams. Private and internal
+   * addresses stay blocked either way; that check is independent of this list.
    */
   allowedHosts: list(process.env.ALLOWED_HOSTS),
 
@@ -32,13 +33,21 @@ export const config = {
   },
 } as const;
 
-/** Fail fast rather than booting an open proxy by accident. */
+/** True when ALLOWED_HOSTS is `*` — any public host is permitted. */
+export const allowsAnyHost = config.allowedHosts.includes("*");
+
+/**
+ * Fail fast rather than booting with no host policy at all.
+ *
+ * `*` is a valid answer, but it has to be stated. An empty variable is far more likely to
+ * be an unset environment than a deliberate choice, and the two should not look the same.
+ */
 export const assertConfigured = (): void => {
   if (config.allowedHosts.length === 0) {
     throw new Error(
-      "ALLOWED_HOSTS is empty. Set it to a comma-separated list of hostnames this proxy " +
-        "may fetch, e.g. ALLOWED_HOSTS=arweave.net,api.example.com. Refusing to start as " +
-        "an open proxy.",
+      "ALLOWED_HOSTS is not set. Either list the hostnames this proxy may fetch " +
+        "(ALLOWED_HOSTS=arweave.net,api.example.com) or set ALLOWED_HOSTS=* to allow any " +
+        "public host. Private and internal addresses are blocked in both cases.",
     );
   }
 };

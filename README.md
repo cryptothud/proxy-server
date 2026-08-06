@@ -14,6 +14,8 @@ Every request passes four checks before a single byte leaves the server:
 
 1. **Protocol** — `http` and `https` only, so `file://`, `gopher://` and friends are out.
 2. **Host allowlist** — the hostname must match `ALLOWED_HOSTS` or be a subdomain of an entry.
+   Set `ALLOWED_HOSTS=*` to skip this layer and accept any public host; the remaining three
+   checks still apply.
 3. **Resolved address** — DNS is resolved and the result rejected if it lands on loopback,
    link-local (`169.254.0.0/16`, which covers cloud metadata), RFC1918, or carrier-grade NAT.
    This matters independently of the allowlist: an allowed hostname can still resolve to a
@@ -57,7 +59,7 @@ Rejected requests return `400` with a reason:
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3006` | Port to listen on |
-| `ALLOWED_HOSTS` | — | **Required.** Comma-separated hostnames the proxy may fetch |
+| `ALLOWED_HOSTS` | — | **Required.** Comma-separated hostnames the proxy may fetch, or `*` for any public host |
 | `ALLOWED_ORIGINS` | empty | Browser origins allowed to call the proxy |
 | `REQUEST_TIMEOUT_MS` | `10000` | Upstream request timeout |
 | `MAX_RESPONSE_BYTES` | `5242880` | Maximum upstream response size |
@@ -97,3 +99,22 @@ independently — back it with Redis if you need a global limit.
 ## License
 
 MIT
+
+### Running as a general-purpose CORS proxy
+
+`ALLOWED_HOSTS=*` accepts any public host. This is a reasonable configuration when the
+service exists to solve CORS for arbitrary URLs, and it is not the same thing as the
+original open proxy: the private-address check is an independent layer and stays active.
+
+```
+ALLOWED_HOSTS=*
+?url=https://any-public-site.com/x   → allowed
+?url=http://10.0.0.5/internal        → 400, private address
+?url=http://169.254.169.254/         → 400, private address
+```
+
+What that leaves open is relay use — anyone can route public traffic through your host, and
+requests reach third parties carrying your IP. Rate limiting caps the throughput but does not
+change who can use it. If the service is reachable from the open internet and you care about
+that, the allowlist is the lever; if it exists precisely to fetch arbitrary URLs, `*` is the
+honest setting.

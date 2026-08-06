@@ -1,6 +1,6 @@
 import { lookup } from "node:dns/promises";
 import net from "node:net";
-import { config } from "./config";
+import { allowsAnyHost, config } from "./config";
 
 export type GuardFailure =
   | "invalid-url"
@@ -47,6 +47,7 @@ const isPrivateAddress = (address: string): boolean => {
 };
 
 const hostIsAllowed = (hostname: string): boolean => {
+  if (allowsAnyHost) return true;
   const host = hostname.toLowerCase();
   return config.allowedHosts.some(
     (allowed) => host === allowed || host.endsWith(`.${allowed}`),

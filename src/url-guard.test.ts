@@ -86,3 +86,40 @@ describe("guardUrl — private address blocking (allowlist bypassed)", () => {
     assert.equal((await guardUrl("https://example.com/")).ok, true);
   });
 });
+
+/**
+ * ALLOWED_HOSTS=* is the "general purpose CORS proxy" mode: any public host is fine.
+ * It must not become a way back into the private network — the address check is a
+ * separate layer and stays on.
+ */
+describe("guardUrl — wildcard host mode", () => {
+  it("allows arbitrary public hosts", async () => {
+    const { guardUrl } = await loadGuard("*");
+    for (const url of ["https://example.com/", "https://arweave.net/x", "https://any.site/y"]) {
+      assert.equal((await guardUrl(url)).ok, true, url);
+    }
+  });
+
+  it("still blocks private and internal addresses", async () => {
+    const { guardUrl } = await loadGuard("*");
+    const blocked = [
+      "http://127.0.0.1/",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://10.0.0.5/",
+      "http://192.168.1.1/",
+      "http://172.16.0.1/",
+      "http://localhost/",
+      "http://[::1]/",
+    ];
+    for (const url of blocked) {
+      const result = await guardUrl(url);
+      assert.deepEqual(result, { ok: false, reason: "private-address" }, url);
+    }
+  });
+
+  it("still rejects non-http protocols", async () => {
+    const { guardUrl } = await loadGuard("*");
+    const result = await guardUrl("file:///etc/passwd");
+    assert.deepEqual(result, { ok: false, reason: "unsupported-protocol" });
+  });
+});
