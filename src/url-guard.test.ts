@@ -64,7 +64,8 @@ describe("guardUrl — protocol", () => {
  * which is exactly how a broken SSRF guard passes its own test suite.
  */
 describe("guardUrl — private address blocking (allowlist bypassed)", () => {
-  const permissive = "localhost,127.0.0.1,169.254.169.254,10.0.0.5,192.168.1.1,172.16.0.1,0.0.0.0,100.64.0.1";
+  const permissive =
+    "localhost,127.0.0.1,169.254.169.254,10.0.0.5,192.168.1.1,172.16.0.1,0.0.0.0,100.64.0.1";
 
   const blocked: Array<[string, string]> = [
     ["http://127.0.0.1/", "loopback"],

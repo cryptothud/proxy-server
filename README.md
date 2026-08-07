@@ -5,8 +5,12 @@ built so it cannot be turned against the network it runs on.
 
 Most tutorial proxies accept any URL and fetch it. That is an SSRF vector: a caller can point
 the server at `169.254.169.254` to read cloud instance credentials, at `localhost` to reach
-services never meant to be public, or simply use the host to launder outbound traffic. This
-one requires an explicit allowlist and refuses to start without one.
+services never meant to be public, or simply use the host to launder outbound traffic.
+
+This one separates the two concerns. _Which public hosts_ are reachable is a policy choice —
+open by default, narrowable through `ALLOWED_HOSTS`. _Whether internal addresses_ are
+reachable is not a choice: loopback, RFC1918, link-local and cloud metadata are rejected on
+every request regardless of configuration.
 
 ## How requests are validated
 
@@ -24,13 +28,13 @@ Every request passes four checks before a single byte leaves the server:
 
 ## Limits
 
-| Limit | Default | Enforcement |
-|---|---|---|
-| Upstream response | 5 MB | Running byte count while streaming; transfer aborted on breach |
-| Request payload | 8 KB | Rejected on `content-length` before the body is read (`413`) |
-| Request URL | 4 KB | Rejected before routing (`414`) |
-| Upstream timeout | 10 s | `AbortController` on the fetch |
-| Requests per IP | 120/min | `express-rate-limit`, throttling from 60 |
+| Limit             | Default | Enforcement                                                    |
+| ----------------- | ------- | -------------------------------------------------------------- |
+| Upstream response | 5 MB    | Running byte count while streaming; transfer aborted on breach |
+| Request payload   | 8 KB    | Rejected on `content-length` before the body is read (`413`)   |
+| Request URL       | 4 KB    | Rejected before routing (`414`)                                |
+| Upstream timeout  | 10 s    | `AbortController` on the fetch                                 |
+| Requests per IP   | 120/min | `express-rate-limit`, throttling from 60                       |
 
 The response limit is counted as bytes arrive rather than read from `content-length`. A
 chunked response omits that header, so a check against it alone is trivially bypassed — and
@@ -71,34 +75,36 @@ Rejected requests return `400` with a reason:
 
 ## Configuration
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3006` | Port to listen on |
-| `ALLOWED_HOSTS` | `*` | Hostnames the proxy may fetch. Defaults to any public host |
-| `ALLOWED_ORIGINS` | empty | Browser origins allowed to call the proxy |
-| `REQUEST_TIMEOUT_MS` | `10000` | Upstream request timeout |
-| `MAX_RESPONSE_BYTES` | `5242880` | Maximum upstream response size |
-| `MAX_REQUEST_BYTES` | `8192` | Maximum request payload |
-| `MAX_URL_LENGTH` | `4096` | Maximum request URL length |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window |
-| `RATE_LIMIT_MAX` | `120` | Max requests per window per IP |
-| `RATE_LIMIT_DELAY_AFTER` | `60` | Requests before throttling begins |
-| `RATE_LIMIT_DELAY_MS` | `500` | Delay added per request once throttling starts |
+| Variable                 | Default   | Description                                                |
+| ------------------------ | --------- | ---------------------------------------------------------- |
+| `PORT`                   | `3006`    | Port to listen on                                          |
+| `ALLOWED_HOSTS`          | `*`       | Hostnames the proxy may fetch. Defaults to any public host |
+| `ALLOWED_ORIGINS`        | empty     | Browser origins allowed to call the proxy                  |
+| `REQUEST_TIMEOUT_MS`     | `10000`   | Upstream request timeout                                   |
+| `MAX_RESPONSE_BYTES`     | `5242880` | Maximum upstream response size                             |
+| `MAX_REQUEST_BYTES`      | `8192`    | Maximum request payload                                    |
+| `MAX_URL_LENGTH`         | `4096`    | Maximum request URL length                                 |
+| `RATE_LIMIT_WINDOW_MS`   | `60000`   | Rate limit window                                          |
+| `RATE_LIMIT_MAX`         | `120`     | Max requests per window per IP                             |
+| `RATE_LIMIT_DELAY_AFTER` | `60`      | Requests before throttling begins                          |
+| `RATE_LIMIT_DELAY_MS`    | `500`     | Delay added per request once throttling starts             |
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Run from source with ts-node |
-| `npm run build` | Compile to `dist/` |
-| `npm start` | Run the compiled build |
-| `npm test` | Run the URL guard test suite |
-| `npm run typecheck` | `tsc --noEmit` |
+| Command             | Description                  |
+| ------------------- | ---------------------------- |
+| `npm run dev`       | Run from source with ts-node |
+| `npm run build`     | Compile to `dist/`           |
+| `npm start`         | Run the compiled build       |
+| `npm test`          | Run the test suite           |
+| `npm run typecheck` | `tsc --noEmit`               |
+| `npm run lint`      | ESLint                       |
+| `npm run format`    | Prettier                     |
 
 ## Tests
 
-`npm test` covers the URL guard — the allowlist, protocol filtering, and private-address
-blocking.
+`npm test` covers the URL guard — allowlist, protocol filtering and private-address
+blocking — and the streaming size limit.
 
 The private-address tests deliberately put loopback, RFC1918 and metadata addresses **on**
 the allowlist. Otherwise the allowlist rejects them first and the address check never runs,
@@ -113,11 +119,7 @@ limiting to see the real client IP rather than attributing every request to the 
 Rate limit counters are per-process and in-memory. Across multiple instances each one limits
 independently — back it with Redis if you need a global limit.
 
-## License
-
-MIT
-
-### Running as a general-purpose CORS proxy
+## Running as a general-purpose CORS proxy
 
 This is the default. With no environment variables at all, the proxy accepts any public
 host — which is the point of a CORS proxy — and that is not the same thing as the open
@@ -141,3 +143,7 @@ What that leaves open is relay use — anyone can route public traffic through y
 requests reach third parties carrying your IP. Rate limiting caps the throughput but does not
 change who can use it. If the service is reachable from the open internet and you care about
 that, `ALLOWED_HOSTS` is the lever.
+
+## License
+
+MIT

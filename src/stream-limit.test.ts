@@ -98,7 +98,7 @@ describe("streamWithLimit", () => {
     // Should have pulled ~65 chunks, not 50,000.
     assert.ok(
       body.chunksProduced < 100,
-      `pulled ${body.chunksProduced} chunks; expected to stop near the cap`,
+      `pulled ${body.chunksProduced} chunks; expected to stop near the cap`
     );
     assert.ok(result.bytes <= 64 * 1024 + 1024, `read ${result.bytes} bytes past the cap`);
   });

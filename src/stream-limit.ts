@@ -21,7 +21,7 @@ export const streamWithLimit = async (
   body: ReadableStream<Uint8Array> | null,
   sink: ByteSink,
   maxBytes: number,
-  onExceeded?: () => void,
+  onExceeded?: () => void
 ): Promise<StreamResult> => {
   if (!body) {
     sink.end();

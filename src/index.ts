@@ -19,7 +19,7 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,
-  }),
+  })
 );
 
 /**
@@ -50,7 +50,7 @@ app.use(
     windowMs: config.rateLimit.windowMs,
     delayAfter: config.rateLimit.delayAfter,
     delayMs: () => config.rateLimit.delayMs,
-  }),
+  })
 );
 
 app.use(
@@ -59,7 +59,7 @@ app.use(
     max: config.rateLimit.maxRequests,
     standardHeaders: true,
     legacyHeaders: false,
-  }),
+  })
 );
 
 const GUARD_MESSAGES: Record<GuardFailure, string> = {
@@ -111,7 +111,7 @@ app.get("/", async (req: Request, res: ExpressResponse) => {
 
     const streamed = await streamWithLimit(upstream.body, res, config.maxResponseBytes, () => {
       console.warn(
-        `Upstream ${guard.url.host} exceeded ${config.maxResponseBytes} bytes; aborting.`,
+        `Upstream ${guard.url.host} exceeded ${config.maxResponseBytes} bytes; aborting.`
       );
       controller.abort();
     });

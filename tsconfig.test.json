@@ -4,12 +4,6 @@
     "outDir": "dist-test",
     "noUnusedLocals": false
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "dist-test"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "dist-test"]
 }

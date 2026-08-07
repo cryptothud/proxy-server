@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022"
-    ],
+    "lib": ["ES2022"],
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "dist",
@@ -19,13 +17,6 @@
     "sourceMap": true,
     "declaration": false
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "dist-test",
-    "**/*.test.ts"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "dist-test", "**/*.test.ts"]
 }

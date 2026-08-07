@@ -3,10 +3,7 @@ import net from "node:net";
 import { allowsAnyHost, config } from "./config";
 
 export type GuardFailure =
-  | "invalid-url"
-  | "unsupported-protocol"
-  | "host-not-allowed"
-  | "private-address";
+  "invalid-url" | "unsupported-protocol" | "host-not-allowed" | "private-address";
 
 export type GuardResult = { ok: true; url: URL } | { ok: false; reason: GuardFailure };
 
@@ -49,9 +46,7 @@ const isPrivateAddress = (address: string): boolean => {
 const hostIsAllowed = (hostname: string): boolean => {
   if (allowsAnyHost) return true;
   const host = hostname.toLowerCase();
-  return config.allowedHosts.some(
-    (allowed) => host === allowed || host.endsWith(`.${allowed}`),
-  );
+  return config.allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
 };
 
 /**
