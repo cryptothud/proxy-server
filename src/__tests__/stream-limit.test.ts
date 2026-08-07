@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { streamWithLimit, type ByteSink } from "./stream-limit";
+import { streamWithLimit, type ByteSink } from "../stream-limit";
 
 /** Records what reached the client and whether the connection was cut. */
 const makeSink = () => {

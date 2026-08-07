@@ -143,7 +143,18 @@ app.use((error: Error, _req: Request, res: ExpressResponse, _next: NextFunction)
   res.status(500).json({ error: "Internal server error." });
 });
 
-app.listen(config.port, () => {
-  console.log(`Proxy listening on port ${config.port}`);
-  console.log(`Host policy: ${describeHostPolicy()}`);
-});
+/**
+ * Only listen when this file is the entry point.
+ *
+ * Starting a server as a side effect of import means anything that pulls the module in —
+ * a test, a script, another service — binds a port it never asked for. Exporting `app`
+ * and guarding the listen keeps the module importable.
+ */
+if (require.main === module) {
+  app.listen(config.port, () => {
+    console.log(`Proxy listening on port ${config.port}`);
+    console.log(`Host policy: ${describeHostPolicy()}`);
+  });
+}
+
+export { app };

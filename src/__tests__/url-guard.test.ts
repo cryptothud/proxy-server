@@ -11,9 +11,9 @@ const loadGuard = async (allowedHosts: string | undefined) => {
   } else {
     process.env.ALLOWED_HOSTS = allowedHosts;
   }
-  delete require.cache[require.resolve("./config")];
-  delete require.cache[require.resolve("./url-guard")];
-  return (await import("./url-guard")) as typeof import("./url-guard");
+  delete require.cache[require.resolve("../config")];
+  delete require.cache[require.resolve("../url-guard")];
+  return (await import("../url-guard")) as typeof import("../url-guard");
 };
 
 describe("guardUrl — allowlist", () => {
@@ -157,8 +157,8 @@ describe("guardUrl — ALLOWED_HOSTS unset (default policy)", () => {
 
   it("reports the default policy in the startup description", async () => {
     delete process.env.ALLOWED_HOSTS;
-    delete require.cache[require.resolve("./config")];
-    const { describeHostPolicy } = await import("./config");
+    delete require.cache[require.resolve("../config")];
+    const { describeHostPolicy } = await import("../config");
     const description = describeHostPolicy();
     assert.match(description, /any public host/);
     assert.match(description, /ALLOWED_HOSTS unset/);
