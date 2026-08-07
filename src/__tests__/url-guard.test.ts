@@ -164,3 +164,33 @@ describe("guardUrl — ALLOWED_HOSTS unset (default policy)", () => {
     assert.match(description, /ALLOWED_HOSTS unset/);
   });
 });
+
+/**
+ * Bracketed IPv6 literals, checked under the wildcard host policy so the allowlist cannot
+ * reject them first and hide whether the address layer works.
+ *
+ * Node keeps the brackets on url.hostname and normalises the dotted IPv4-mapped spelling to
+ * hex, so [::ffff:127.0.0.1] arrives as ::ffff:7f00:1. Both had to be handled: without the
+ * hex form, that URL reached loopback.
+ */
+describe("guardUrl — bracketed IPv6 literals", () => {
+  const cases: Array<[string, string]> = [
+    ["http://[::1]/", "loopback"],
+    ["http://[::ffff:127.0.0.1]/", "IPv4-mapped loopback (hex-normalised)"],
+    ["http://[::ffff:10.0.0.5]/", "IPv4-mapped RFC1918"],
+    ["http://[fe80::1]/", "link-local"],
+    ["http://[fd00::1]/", "unique-local"],
+  ];
+
+  for (const [url, label] of cases) {
+    it(`blocks ${label}`, async () => {
+      const { guardUrl } = await loadGuard("*");
+      assert.deepEqual(await guardUrl(url), { ok: false, reason: "private-address" }, url);
+    });
+  }
+
+  it("still allows a public IPv6 literal", async () => {
+    const { guardUrl } = await loadGuard("*");
+    assert.equal((await guardUrl("http://[2606:4700::1111]/")).ok, true);
+  });
+});

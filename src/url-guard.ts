@@ -31,12 +31,32 @@ const isPrivateAddress = (address: string): boolean => {
 
   if (version === 6) {
     const normalized = address.toLowerCase();
+
     if (normalized === "::1" || normalized === "::") return true;
     if (normalized.startsWith("fe80")) return true; // link-local
     if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true; // unique-local
-    // IPv4-mapped, e.g. ::ffff:127.0.0.1
-    const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPrivateAddress(mapped[1]);
+
+    // IPv4-mapped addresses (::ffff:0:0/96) reach the IPv4 stack, so they must be judged by
+    // the IPv4 rules. Node normalises the dotted spelling to hex — [::ffff:127.0.0.1] arrives
+    // as ::ffff:7f00:1 — so both forms have to be decoded or loopback slips through.
+    const mapped = /^::ffff:(.+)$/.exec(normalized);
+    if (mapped?.[1]) {
+      const tail = mapped[1];
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(tail)) return isPrivateAddress(tail);
+
+      const groups = tail.split(":");
+      if (groups.length === 2) {
+        const high = parseInt(groups[0] ?? "", 16);
+        const low = parseInt(groups[1] ?? "", 16);
+        if (Number.isFinite(high) && Number.isFinite(low)) {
+          const dotted = [high >> 8, high & 0xff, low >> 8, low & 0xff].join(".");
+          return isPrivateAddress(dotted);
+        }
+      }
+      // An unrecognised mapped form is treated as private rather than trusted.
+      return true;
+    }
+
     return false;
   }
 
@@ -72,14 +92,18 @@ export const guardUrl = async (rawUrl: string): Promise<GuardResult> => {
     return { ok: false, reason: "host-not-allowed" };
   }
 
-  if (net.isIP(url.hostname) !== 0) {
-    return isPrivateAddress(url.hostname)
+  // Node keeps the brackets on an IPv6 literal, so `[::1]` is not recognised by net.isIP
+  // and would otherwise fall through to a DNS lookup instead of the address check.
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+
+  if (net.isIP(hostname) !== 0) {
+    return isPrivateAddress(hostname)
       ? { ok: false, reason: "private-address" }
       : { ok: true, url };
   }
 
   try {
-    const resolved = await lookup(url.hostname, { all: true });
+    const resolved = await lookup(hostname, { all: true });
     if (resolved.some((entry) => isPrivateAddress(entry.address))) {
       return { ok: false, reason: "private-address" };
     }
