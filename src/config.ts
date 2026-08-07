@@ -32,8 +32,25 @@ export const config = {
   /** Abandon upstream requests that exceed this. */
   requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS ?? 10_000),
 
-  /** Refuse upstream responses larger than this, in bytes. */
+  /**
+   * Refuse upstream responses larger than this, in bytes.
+   *
+   * Enforced against a running byte count while streaming, not against `content-length` —
+   * a chunked response omits that header, and buffering first to measure it would allocate
+   * the payload the limit exists to prevent.
+   */
   maxResponseBytes: Number(process.env.MAX_RESPONSE_BYTES ?? 5 * 1024 * 1024),
+
+  /**
+   * Reject request payloads larger than this, in bytes.
+   *
+   * This proxy only serves GET and parses no body, so the default is deliberately tiny;
+   * it exists to refuse uploads at the door rather than accept and discard them.
+   */
+  maxRequestBytes: Number(process.env.MAX_REQUEST_BYTES ?? 8 * 1024),
+
+  /** Reject request URLs longer than this. Node caps headers at 16 KB by default. */
+  maxUrlLength: Number(process.env.MAX_URL_LENGTH ?? 4096),
 
   rateLimit: {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000),

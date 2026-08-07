@@ -22,7 +22,23 @@ Every request passes four checks before a single byte leaves the server:
 4. **Redirects** — not followed. Otherwise an allowed host could bounce the request to a
    blocked one and defeat every check above.
 
-Responses are capped by size and requests by time, so a slow or enormous upstream cannot hold
+## Limits
+
+| Limit | Default | Enforcement |
+|---|---|---|
+| Upstream response | 5 MB | Running byte count while streaming; transfer aborted on breach |
+| Request payload | 8 KB | Rejected on `content-length` before the body is read (`413`) |
+| Request URL | 4 KB | Rejected before routing (`414`) |
+| Upstream timeout | 10 s | `AbortController` on the fetch |
+| Requests per IP | 120/min | `express-rate-limit`, throttling from 60 |
+
+The response limit is counted as bytes arrive rather than read from `content-length`. A
+chunked response omits that header, so a check against it alone is trivially bypassed — and
+buffering the body in order to measure it would allocate exactly the payload the limit exists
+to prevent. Writes respect backpressure, so a slow client cannot cause the upstream to
+accumulate unbounded in the response stream instead.
+
+Requests are capped by time as well as size, so a slow or enormous upstream cannot hold
 the process open. Upstream error text is never forwarded — it can disclose internal hostnames
 and paths — so failures return a generic message and the detail goes to the server log.
 
@@ -62,6 +78,8 @@ Rejected requests return `400` with a reason:
 | `ALLOWED_ORIGINS` | empty | Browser origins allowed to call the proxy |
 | `REQUEST_TIMEOUT_MS` | `10000` | Upstream request timeout |
 | `MAX_RESPONSE_BYTES` | `5242880` | Maximum upstream response size |
+| `MAX_REQUEST_BYTES` | `8192` | Maximum request payload |
+| `MAX_URL_LENGTH` | `4096` | Maximum request URL length |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window |
 | `RATE_LIMIT_MAX` | `120` | Max requests per window per IP |
 | `RATE_LIMIT_DELAY_AFTER` | `60` | Requests before throttling begins |
